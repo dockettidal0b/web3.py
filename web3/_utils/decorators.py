@@ -23,7 +23,7 @@ def reject_recursive_repeats(to_wrap: Callable[..., Any]) -> Callable[..., Any]:
     """
     # types ignored b/c dynamically set attribute
     already_called: Set[Tuple[int, ...]] = set()
-    to_wrap.__already_called = already_called  # type: ignore
+    # to_wrap.__already_called = already_called  # type: ignore # This line is commented out
 
     add_call = already_called.add
     remove_call = already_called.remove

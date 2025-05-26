@@ -45,7 +45,7 @@ from eth_utils.toolz import (
 from ens.utils import (
     is_valid_ens_name,
 )
-from web3._utils.abi import (
+from web3._utils.abi_type_utils import (  # Updated import
     is_address_type,
     is_array_type,
     is_bool_type,
@@ -54,9 +54,10 @@ from web3._utils.abi import (
     is_recognized_type,
     is_string_type,
     is_uint_type,
-    length_of_array_type,
-    sub_type_of_array_type,
+    length_of_array_type,   # Moved from web3._utils.abi
+    sub_type_of_array_type, # Moved from web3._utils.abi
 )
+# No longer need to import length_of_array_type and sub_type_of_array_type from web3._utils.abi
 from web3._utils.formatters import (
     apply_error_formatters,
 )

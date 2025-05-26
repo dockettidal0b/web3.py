@@ -444,63 +444,19 @@ def find_constructor_abi_element_by_type(contract_abi: ABI) -> Optional[ABIConst
         raise Web3ValueError("Found multiple constructors.")
     return None
 
-
-DYNAMIC_TYPES = ["bytes", "string"]
-
-INT_SIZES = range(8, 257, 8)
-BYTES_SIZES = range(1, 33)
-UINT_TYPES = [f"uint{i}" for i in INT_SIZES]
-INT_TYPES = [f"int{i}" for i in INT_SIZES]
-BYTES_TYPES = [f"bytes{i}" for i in BYTES_SIZES] + ["bytes32.byte"]
-
-STATIC_TYPES = list(
-    itertools.chain(
-        ["address", "bool"],
-        UINT_TYPES,
-        INT_TYPES,
-        BYTES_TYPES,
-    )
+from .abi_type_utils import (  # noqa: E402
+    is_address_type,
+    is_array_type,
+    is_bool_type,
+    is_bytes_type,
+    is_int_type,
+    is_recognized_type,
+    is_string_type,
+    is_uint_type,
+    is_probably_enum,
+    sub_type_of_array_type, # Added import
+    length_of_array_type,   # Added import
 )
-
-BASE_TYPE_REGEX = "|".join(
-    _type + "(?![a-z0-9])" for _type in itertools.chain(STATIC_TYPES, DYNAMIC_TYPES)
-)
-
-SUB_TYPE_REGEX = r"\[" "[0-9]*" r"\]"
-
-TYPE_REGEX = ("^" "(?:{base_type})" "(?:(?:{sub_type})*)?" "$").format(
-    base_type=BASE_TYPE_REGEX,
-    sub_type=SUB_TYPE_REGEX,
-)
-
-
-def is_recognized_type(abi_type: TypeStr) -> bool:
-    return bool(re.match(TYPE_REGEX, abi_type))
-
-
-def is_bool_type(abi_type: TypeStr) -> bool:
-    return abi_type == "bool"
-
-
-def is_uint_type(abi_type: TypeStr) -> bool:
-    return abi_type in UINT_TYPES
-
-
-def is_int_type(abi_type: TypeStr) -> bool:
-    return abi_type in INT_TYPES
-
-
-def is_address_type(abi_type: TypeStr) -> bool:
-    return abi_type == "address"
-
-
-def is_bytes_type(abi_type: TypeStr) -> bool:
-    return abi_type in BYTES_TYPES + ["bytes"]
-
-
-def is_string_type(abi_type: TypeStr) -> bool:
-    return abi_type == "string"
-
 
 @curry
 def is_length(target_length: int, value: abc.Sized) -> bool:
@@ -544,51 +500,9 @@ def size_of_type(abi_type: TypeStr) -> Optional[int]:
     # or types with parsing errors/invalid format:
     return None
 
-
-END_BRACKETS_OF_ARRAY_TYPE_REGEX = r"\[[^]]*\]$"
-
-
-def sub_type_of_array_type(abi_type: TypeStr) -> str:
-    if not is_array_type(abi_type):
-        raise Web3ValueError(f"Cannot parse subtype of nonarray abi-type: {abi_type}")
-
-    return re.sub(END_BRACKETS_OF_ARRAY_TYPE_REGEX, "", abi_type, count=1)
-
-
-def length_of_array_type(abi_type: TypeStr) -> Optional[int]:
-    if not is_array_type(abi_type):
-        raise Web3ValueError(f"Cannot parse length of nonarray abi-type: {abi_type}")
-
-    match = re.search(END_BRACKETS_OF_ARRAY_TYPE_REGEX, abi_type)
-    if match is None:
-        # This case should ideally not be reached if is_array_type passed and regex is correct
-        return None
-    
-    inner_brackets = match.group(0).strip("[]")
-    if not inner_brackets: # Dynamic array like 'uint[]'
-        return None
-    else: # Fixed-size array like 'uint[2]'
-        return int(inner_brackets)
-
-
-ARRAY_REGEX = ("^" "[a-zA-Z0-9_]+" "({sub_type})+" "$").format(sub_type=SUB_TYPE_REGEX)
-
-
-def is_array_type(abi_type: TypeStr) -> bool:
-    return bool(re.match(ARRAY_REGEX, abi_type))
-
-
-NAME_REGEX = "[a-zA-Z_]" "[a-zA-Z0-9_]*"
-
-
-ENUM_REGEX = ("^" "{lib_name}" r"\." "{enum_name}" "$").format(
-    lib_name=NAME_REGEX, enum_name=NAME_REGEX
-)
-
-
-def is_probably_enum(abi_type: TypeStr) -> bool:
-    return bool(re.match(ENUM_REGEX, abi_type))
-
+# END_BRACKETS_OF_ARRAY_TYPE_REGEX, sub_type_of_array_type, length_of_array_type,
+# ARRAY_REGEX, is_array_type, NAME_REGEX, ENUM_REGEX, is_probably_enum
+# have all been moved to abi_type_utils.py or are covered by imports from there.
 
 @to_tuple
 def normalize_event_input_types(

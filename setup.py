@@ -85,7 +85,7 @@ setup(
     python_requires=">=3.8, <4",
     extras_require=extras_require,
     py_modules=["web3", "ens"],
-    ext_modules=mypycify(['web3/_utils/math.py']),
+    ext_modules=mypycify(['web3/_utils/math.py', 'web3/_utils/encoding.py']),
     license="MIT",
     zip_safe=False,
     keywords="ethereum",

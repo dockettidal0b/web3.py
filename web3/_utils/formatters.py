@@ -142,7 +142,7 @@ def apply_error_formatters(
     error_formatters: Callable[..., Any],
     response: RPCResponse,
 ) -> RPCResponse:
-    if error_formatters:
+    if error_formatters is not None:
         formatted_resp = pipe(response, error_formatters)
         return formatted_resp
     else:
@@ -154,7 +154,7 @@ def apply_null_result_formatters(
     response: RPCResponse,
     params: Optional[Any] = None,
 ) -> RPCResponse:
-    if null_result_formatters:
+    if null_result_formatters is not None:
         formatted_resp = pipe(params, null_result_formatters)
         return formatted_resp
     else:
