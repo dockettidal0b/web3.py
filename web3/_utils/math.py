@@ -13,7 +13,7 @@ def percentile(
     values: Optional[Sequence[int]] = None, percentile: Optional[float] = None
 ) -> float:
     """Calculates a simplified weighted average percentile"""
-    if values in [None, tuple(), []] or len(values) < 1:
+    if not values or len(values) < 1:
         raise InsufficientData(
             f"Expected a sequence of at least 1 integers, got {values!r}"
         )

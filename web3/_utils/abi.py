@@ -89,6 +89,10 @@ from web3._utils.ens import (
 from web3._utils.formatters import (
     recursive_map,
 )
+from web3._utils.validation import ( # Added for validate_abi_type
+    validate_abi_type,
+    validate_abi_value, # Though not used in size_of_type, it's related
+)
 from web3.exceptions import (
     MismatchedABI,
     Web3AttributeError,
@@ -206,11 +210,11 @@ class AddressEncoder(encoding.AddressEncoder):
 
 
 class AcceptsHexStrEncoder(encoding.BaseEncoder):
-    subencoder_cls: Type[encoding.BaseEncoder] = None
-    is_strict: bool = None
-    is_big_endian: bool = False
-    data_byte_size: int = None
-    value_bit_size: int = None
+    subencoder_cls: Optional[Type[encoding.BaseEncoder]] = None
+    is_strict: Optional[bool] = None
+    is_big_endian: bool = False  # Assuming False is a valid default, not Optional
+    data_byte_size: Optional[int] = None
+    value_bit_size: Optional[int] = None
 
     def __init__(
         self,
@@ -423,7 +427,7 @@ def _align_abi_input(
     )
 
 
-def find_constructor_abi_element_by_type(contract_abi: ABI) -> ABIConstructor:
+def find_constructor_abi_element_by_type(contract_abi: ABI) -> Optional[ABIConstructor]:
     """
     Find the constructor ABI element in the contract ABI.
 
@@ -503,21 +507,42 @@ def is_length(target_length: int, value: abc.Sized) -> bool:
     return len(value) == target_length
 
 
-def size_of_type(abi_type: TypeStr) -> int:
+def size_of_type(abi_type: TypeStr) -> Optional[int]:
     """
-    Returns size in bits of abi_type
+    Returns size in bits of abi_type if fixed size, otherwise None.
     """
-    if "string" in abi_type:
-        return None
-    if "byte" in abi_type:
-        return None
-    if "[" in abi_type:
-        return None
+    validate_abi_type(abi_type)
     if abi_type == "bool":
+        # Intrinsic size is 1 bit, but usually padded to a byte or word.
+        # eth_abi often treats it as uint256 (0 or 1) for encoding.
+        # Consistent with previous code, returning 8. Caller must be aware.
         return 8
     if abi_type == "address":
-        return 160
-    return int(re.sub(r"\D", "", abi_type))
+        return 160  # 20 bytes * 8 bits
+
+    if abi_type.startswith("bytes") and abi_type != "bytes":
+        # Fixed size bytesN (e.g., "bytes32")
+        try:
+            size_str = abi_type[5:]  # Strip "bytes" prefix
+            if size_str.isnumeric():
+                size = int(size_str)
+                if 1 <= size <= 32:  # Standard ABI bytesN sizes
+                    return size * 8
+        except ValueError:
+            # Catch potential errors if stripping/conversion fails unexpectedly
+            pass  # Fall through to return None
+    elif abi_type.startswith("uint") or abi_type.startswith("int"):
+        prefix = "uint" if abi_type.startswith("uint") else "int"
+        size_str = abi_type[len(prefix):]
+        if size_str.isnumeric():
+            size = int(size_str)
+            if 8 <= size <= 256 and size % 8 == 0:  # Standard ABI int/uint sizes
+                return size
+        # Fall through for invalid formats like "intABC" or "uint[]" (arrays handled later)
+
+    # For dynamic types ('bytes', 'string'), array types (e.g., 'uint256[]'),
+    # or types with parsing errors/invalid format:
+    return None
 
 
 END_BRACKETS_OF_ARRAY_TYPE_REGEX = r"\[[^]]*\]$"
@@ -530,16 +555,19 @@ def sub_type_of_array_type(abi_type: TypeStr) -> str:
     return re.sub(END_BRACKETS_OF_ARRAY_TYPE_REGEX, "", abi_type, count=1)
 
 
-def length_of_array_type(abi_type: TypeStr) -> int:
+def length_of_array_type(abi_type: TypeStr) -> Optional[int]:
     if not is_array_type(abi_type):
         raise Web3ValueError(f"Cannot parse length of nonarray abi-type: {abi_type}")
 
-    inner_brackets = (
-        re.search(END_BRACKETS_OF_ARRAY_TYPE_REGEX, abi_type).group(0).strip("[]")
-    )
-    if not inner_brackets:
+    match = re.search(END_BRACKETS_OF_ARRAY_TYPE_REGEX, abi_type)
+    if match is None:
+        # This case should ideally not be reached if is_array_type passed and regex is correct
         return None
-    else:
+    
+    inner_brackets = match.group(0).strip("[]")
+    if not inner_brackets: # Dynamic array like 'uint[]'
+        return None
+    else: # Fixed-size array like 'uint[2]'
         return int(inner_brackets)
 
 

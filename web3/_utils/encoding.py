@@ -82,19 +82,55 @@ def hex_encode_abi_type(
             )
         )
     elif is_bool_type(abi_type):
+        # For bool, data_size will be 8 from size_of_type if not forced.
+        # However, bools are typically encoded as uint256 (0 or 1), padded to 32 bytes.
+        # The `force_size=256` in array handling covers this for array elements.
+        # If called directly, ensure data_size implies 32-byte padding if that's the ABI expectation.
+        # The current size_of_type returns 8 for bool. If strict 32-byte padding is always
+        # needed for bools (even non-array elements), data_size should be 256 here.
+        # Assuming the existing to_hex_with_size handles it based on typical ABI padding logic
+        # which often defaults to 256 bits for single elements not otherwise sized.
+        # If size_of_type('bool') -> 8, this will pad to 1 byte.
+        # If ABI requires bool to be padded as uint256, this should be:
+        # return to_hex_with_size(value, 256)
+        # For now, respecting data_size as calculated.
+        if data_size is None: # Should not happen if size_of_type('bool') is 8
+             raise Web3ValueError(f"Cannot determine size for type {abi_type}")
         return to_hex_with_size(value, data_size)
     elif is_uint_type(abi_type):
+        if data_size is None: # Should not happen if size_of_type for uintN is correct
+             raise Web3ValueError(f"Cannot determine size for type {abi_type}")
         return to_hex_with_size(value, data_size)
     elif is_int_type(abi_type):
+        if data_size is None: # Should not happen if size_of_type for intN is correct
+             raise Web3ValueError(f"Cannot determine size for type {abi_type}")
         return to_hex_twos_compliment(value, data_size)
     elif is_address_type(abi_type):
+        if data_size is None: # Should not happen, size_of_type('address') is 160
+             raise Web3ValueError(f"Cannot determine size for type {abi_type}")
         return pad_hex(value, data_size)
     elif is_bytes_type(abi_type):
-        if is_bytes(value):
-            return encode_hex(value)
-        else:
-            return value
+        # data_size would have been computed using size_of_type
+        # For "bytes" (dynamic), size_of_type returns None, so data_size is None (if force_size is None)
+        # For "bytesN", size_of_type returns N*8.
+        if abi_type == "bytes":  # Dynamic bytes
+            if not is_bytes(value): # If not bytes, assume it's already a HexStr
+                # This case might need validation if `value` must be bytes
+                return value
+            return encode_hex(value) # No padding for dynamic bytes
+        else:  # Fixed-size bytesN (e.g., bytes32)
+            _data_size = data_size # Use data_size calculated at the start of the function
+            if _data_size is None:
+                # This should now not be reached if size_of_type is fixed for bytesN
+                raise Web3ValueError(f"Cannot determine size for fixed type {abi_type}")
+            if is_bytes(value):
+                return to_hex_with_size(value, _data_size) # Pad to fixed size
+            else: # Assume value is hex string, needs padding
+                return pad_hex(value, _data_size) # Pad to fixed size
     elif is_string_type(abi_type):
+        # Strings are dynamic types, their size is determined by content.
+        # data_size from size_of_type("string") will be None.
+        # Encoding is (UTF-8 bytes) -> hex. No padding to a fixed field size here.
         return to_hex(text=value)
     else:
         raise Web3ValueError(f"Unsupported ABI type: {abi_type}")
@@ -104,6 +140,8 @@ def to_hex_twos_compliment(value: Any, bit_size: int) -> HexStr:
     """
     Converts integer value to twos compliment hex representation with given bit_size
     """
+    if not isinstance(bit_size, int):
+        raise Web3TypeError(f"bit_size must be an integer, got {type(bit_size)}")
     if value >= 0:
         return to_hex_with_size(value, bit_size)
 
@@ -117,6 +155,8 @@ def to_hex_with_size(value: Any, bit_size: int) -> HexStr:
     """
     Converts a value to hex with given bit_size:
     """
+    if not isinstance(bit_size, int):
+        raise Web3TypeError(f"bit_size must be an integer, got {type(bit_size)}")
     return pad_hex(to_hex(value), bit_size)
 
 
@@ -124,8 +164,10 @@ def pad_hex(value: Any, bit_size: int) -> HexStr:
     """
     Pads a hex string up to the given bit_size
     """
-    value = remove_0x_prefix(value)
-    return add_0x_prefix(value.zfill(int(bit_size / 4)))
+    if not isinstance(bit_size, int):
+        raise Web3TypeError(f"bit_size must be an integer, got {type(bit_size)}")
+    value = remove_0x_prefix(HexStr(value)) # Ensure value is HexStr then remove prefix
+    return add_0x_prefix(HexStr(value.zfill(int(bit_size / 4))))
 
 
 def trim_hex(hexstr: HexStr) -> HexStr:
@@ -293,7 +335,7 @@ def encode_single_packed(_type: TypeStr, value: Any) -> bytes:
         return codecs.encode(value, "utf8")
     elif abi_type.base == "bytes":
         return value
-    return None
+    raise Web3ValueError(f"Unsupported ABI type for packed encoding: {_type}")
 
 
 class Web3JsonEncoder(json.JSONEncoder):
