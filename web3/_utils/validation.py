@@ -354,7 +354,11 @@ def validate_rpc_response_and_raise_if_error(
                 response, 'error["message"] is required and must be a string value.'
             )
         elif error_message == "transaction not found":
-            transaction_hash = params[0]
+            transaction_hash = None
+            if params and is_list_like(params) and len(params) > 0:
+                transaction_hash = params[0]
+            # else: transaction_hash remains None, or handle error if hash is mandatory
+
             web3_rpc_error = TransactionNotFound(
                 repr(error),
                 rpc_response=response,
@@ -377,7 +381,7 @@ def validate_rpc_response_and_raise_if_error(
                     "currently enabled."
                 ),
             )
-        elif any(
+        elif isinstance(error_message, str) and any(
             # parse specific timeout messages
             timeout_str in error_message.lower()
             for timeout_str in KNOWN_REQUEST_TIMEOUT_MESSAGING

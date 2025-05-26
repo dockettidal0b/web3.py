@@ -139,7 +139,7 @@ def remove_key_if(
 
 
 def apply_error_formatters(
-    error_formatters: Callable[..., Any],
+    error_formatters: Optional[Callable[..., Any]],
     response: RPCResponse,
 ) -> RPCResponse:
     if error_formatters is not None:
